@@ -1,6 +1,7 @@
 defmodule Cthulhu.Crawler.Supervisor do
   use Supervisor
 
+  alias Cthulhu.Crawler.Store
   alias Cthulhu.Crawler.Worker
 
   def start_link(num_crawlers) do
@@ -8,13 +9,10 @@ defmodule Cthulhu.Crawler.Supervisor do
   end
 
   def init(num_crawlers) do
-    opts = [
-      strategy: :one_for_one
-    ]
+    store    = [worker(Store, [])]
+    crawlers = 1..num_crawlers |> Enum.map(fn x -> worker(Worker, [], id: "worker_#{x}") end)
 
-    children = 1..num_crawlers |> Enum.map(fn x -> worker(Worker, [], id: "worker_#{x}") end)
-
-    supervise(children, opts)
+    supervise(store ++ crawlers, strategy: :one_for_one)
   end
 
 end

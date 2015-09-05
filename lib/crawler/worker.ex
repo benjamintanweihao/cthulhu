@@ -1,7 +1,10 @@
 defmodule Cthulhu.Crawler.Worker do
   use GenServer
+  require Logger
 
-  @timeout 1000
+  alias Cthulhu.Crawler.Store
+
+  @timeout 5000
 
   #######
   # API #
@@ -20,38 +23,46 @@ defmodule Cthulhu.Crawler.Worker do
   #############
 
   def init(:ok) do
-    # send out of band message to self to kick start pooling ...
     :timer.send_after(0, :poll)
     {:ok, []}
   end
 
   def handle_cast({:crawl, url}, _state) do
+    Logger.info "#{inspect self} crawling: #{url}"
+
     case fetch_page(url) do
       {:ok, body} ->
         case URI.parse(url) do
-          %URI{host: host} when is_binary(host) ->
-            links = extract_links(host, body)
-            # TODO: Add to store
-            :timer.send_after(0, self, :poll) 
-            IO.puts "#{inspect self} crawling done!"
+          %URI{path: path} ->
+
+            links = extract_links(url, body)
+
+            Enum.each(links, &Store.add_url(&1))
+            Store.update_url(url, body)
+
+            :timer.send_after(@timeout, self, :poll)
             {:noreply, links}
 
           _ ->
+            :timer.send_after(0, :poll)
             {:noreply, []}
         end
 
       {:error, _reason} ->
+        :timer.send_after(0, :poll)
         {:noreply, []}
     end
   end
 
   def handle_info(:poll, state) do
-    if :random.uniform < 0.50 do
-      IO.puts "#{inspect self} crawling ..."
-      crawl(self, "https://en.wikipedia.org/wiki/Main_Page")
-    else
-      IO.puts "#{inspect self} polling ..."
-      :timer.send_after(@timeout, self, :poll) 
+    case Store.get_unseen_url do
+      nil ->
+        Logger.info "#{inspect self} polling"
+
+        :timer.send_after(@timeout, self, :poll)
+
+      url ->
+        crawl(self, url)
     end
 
     {:noreply, state}
