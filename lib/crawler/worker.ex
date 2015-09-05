@@ -14,8 +14,8 @@ defmodule Cthulhu.Crawler.Worker do
     GenServer.start_link(__MODULE__, :ok)
   end
 
-  def crawl(pid, url) do
-    GenServer.cast(pid, {:crawl, url})
+  def crawl(pid, url, depth) do
+    GenServer.cast(pid, {:crawl, url, depth})
   end
 
   #############
@@ -27,17 +27,32 @@ defmodule Cthulhu.Crawler.Worker do
     {:ok, []}
   end
 
-  def handle_cast({:crawl, url}, _state) do
-    Logger.info "#{inspect self} crawling: #{url}"
+  def handle_info(:poll, state) do
+    case Store.get_unseen_url do
+      nil ->
+        Logger.info "#{inspect self} polling"
+
+        :timer.send_after(@timeout, self, :poll)
+
+      {url, depth} ->
+        crawl(self, url, depth)
+    end
+
+    {:noreply, state}
+  end
+
+  def handle_cast({:crawl, url, depth}, _state) do
+    Logger.info "#{inspect self} crawling [#{depth}]: #{url} "
 
     case fetch_page(url) do
       {:ok, body} ->
+
         case URI.parse(url) do
-          %URI{path: path} ->
+
+          %URI{path: path} when is_binary(path) ->
 
             links = extract_links(url, body)
-
-            Enum.each(links, &Store.add_url(&1))
+            Enum.each(links, &Store.add_url(&1, depth+1))
             Store.update_url(url, body)
 
             :timer.send_after(@timeout, self, :poll)
@@ -52,20 +67,6 @@ defmodule Cthulhu.Crawler.Worker do
         :timer.send_after(0, :poll)
         {:noreply, []}
     end
-  end
-
-  def handle_info(:poll, state) do
-    case Store.get_unseen_url do
-      nil ->
-        Logger.info "#{inspect self} polling"
-
-        :timer.send_after(@timeout, self, :poll)
-
-      url ->
-        crawl(self, url)
-    end
-
-    {:noreply, state}
   end
 
   #####################
