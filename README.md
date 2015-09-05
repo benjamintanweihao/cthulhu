@@ -1,4 +1,4 @@
-Cthulhu
+Cthulhu - A Web Crawler written in Elixir/OTP
 =======
 
 ![](http://i.imgur.com/rkaKhzN.png)
