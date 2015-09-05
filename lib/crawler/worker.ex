@@ -72,20 +72,24 @@ defmodule Cthulhu.Crawler.Worker do
   # Private Functions #
   #####################
 
-  def fetch_page(url) do
-    case HTTPoison.get(url) do
+  defp fetch_page(url) do
+    case HTTPoison.get(url, [], [hackney: [follow_redirect: true]]) do
       {:ok, %HTTPoison.Response{status_code: status_code, body: body}} when status_code in 200..299 ->
         {:ok, body} 
+
       {:ok, %HTTPoison.Response{status_code: 404}} ->
         {:error, :not_found}
+
       {:error, %HTTPoison.Error{reason: reason}} ->
         {:error, reason}
+
       _ ->
         {:error, :unknown} 
+
     end
   end
 
-  def extract_links(host, page) do
+  defp extract_links(host, page) do
     result = ~r/<a[^>]* href="([^"]*)"/ |> Regex.scan(page) 
     links = case is_list(result) do
       true  -> result |> Enum.map(fn [_,x] -> x end)
@@ -98,15 +102,18 @@ defmodule Cthulhu.Crawler.Worker do
       |> Enum.uniq
   end
 
-  def normalize_link(host, url) do
+  defp normalize_link(host, url) do
     case URI.parse(url) do
       %URI{host: nil, path: nil} -> 
         nil
 
-      %URI{host: nil, path: path} when is_binary(path) -> 
+      %URI{host: nil, path: path} when is_binary(path) ->
         host <> path
 
-      %URI{host: host, path: path} -> 
+      %URI{host: host, path: nil} when is_binary(host) ->
+        host
+
+      %URI{host: host, path: path} when is_binary(host) and is_binary(path) ->
         "#{host}#{path}"
 
       _ -> 
