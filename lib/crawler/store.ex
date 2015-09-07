@@ -12,7 +12,7 @@ defmodule Cthulhu.Crawler.Store do
   end
 
   def add_url(url, depth \\ 0) do
-    Agent.update(__MODULE__, &HashDict.put_new(&1, strip_extra_slashes(url), %UrlState{depth: depth}))
+    Agent.update(__MODULE__, &HashDict.put_new(&1, strip_extra_slashes(url), %UrlState{depth: depth}), :infinity)
   end
 
   def get_unseen_url do
@@ -42,13 +42,13 @@ defmodule Cthulhu.Crawler.Store do
           {{url, depth}, new_dict}
       end
 
-    end)
+    end, :infinity)
   end
 
   def update_url(url, body) do
     Agent.update(__MODULE__, &HashDict.update!(&1, url, fn(_) ->
       %UrlState{is_seen: true, body: body}
-    end)) 
+    end), :infinity)
   end
 
   defp strip_extra_slashes(url) do
